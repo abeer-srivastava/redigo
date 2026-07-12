@@ -39,7 +39,7 @@ func main(){
 		mem,
 	)
 	if(err!=nil){
-		log.Fatal("wal init failed %v",err)
+		log.Fatalf("wal init failed %v",err)
 	}
 	kvStore:=ttl.NewTTLStore(
 		wal,
