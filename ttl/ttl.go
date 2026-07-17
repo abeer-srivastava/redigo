@@ -137,6 +137,10 @@ func (t *TTLStore) Exists(key string)bool{
 	return t.inner.Exists(key)
 }
 
+func (t *TTLStore) Scan(start,end string)([]store.KeyValue,error){
+	return t.inner.Scan(start,end)
+}
+
 func (t *TTLStore)Close()error{
 	close(t.done)
 	t.wg.Wait()
