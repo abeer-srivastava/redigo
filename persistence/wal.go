@@ -20,6 +20,7 @@ const (
 type WalStore struct{
 	store store.Store
 	file *os.File
+	path string
 	mu sync.Mutex
 	closed bool
 }
@@ -181,5 +182,6 @@ func NewWalStore(path string , inner store.Store) (*WalStore,error){
 	return &WalStore{
 		store:inner,
 		file:f,
+		path:path,
 	},nil
 }

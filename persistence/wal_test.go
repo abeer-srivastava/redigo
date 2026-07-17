@@ -178,3 +178,134 @@ func TestWAL_CorruptedTailRecovery(t *testing.T) {
 
 	mustGet(t, s2, "good", "data")
 }
+
+func TestWAL_Compact_ShrinksFile(t *testing.T){
+	path:=filepath.Join(t.TempDir(),"compact.wal")
+	s,err:=NewWalStore(path,store.NewMemoryStore())
+	if(err!=nil){
+		t.Fatal(err)
+	}
+
+	// write 100 overwrites to key "x"
+	for i:=0;i<100;i++{
+		mustSet(t,s,"x",string(rune('a'+i%26)))
+	}
+
+	before,_:=os.Stat(path)
+	if err:=s.Compact();err!=nil{
+		t.Fatalf("Compact failed: %v",err)
+	}
+	after,_:=os.Stat(path)
+
+	if(after.Size()>=before.Size()){
+		t.Fatalf("expected compaction to shrink file: before=%d after=%d",before.Size(),after.Size())
+	}
+}
+
+func TestWAL_Compact_PreservesData(t *testing.T){
+	path:=filepath.Join(t.TempDir(),"compact.wal")
+	s,err:=NewWalStore(path,store.NewMemoryStore())
+	if(err!=nil){
+		t.Fatal(err)
+	}
+
+	mustSet(t,s,"a","1")
+	mustSet(t,s,"b","2")
+	mustSet(t,s,"c","3")
+
+	if err:=s.Compact();err!=nil{
+		t.Fatalf("Compact failed: %v",err)
+	}
+
+	mustGet(t,s,"a","1")
+	mustGet(t,s,"b","2")
+	mustGet(t,s,"c","3")
+}
+
+func TestWAL_Compact_WorksAfterRestart(t *testing.T){
+	path:=filepath.Join(t.TempDir(),"compact.wal")
+
+	// phase 1: write data
+	s1,err:=NewWalStore(path,store.NewMemoryStore())
+	if(err!=nil){
+		t.Fatal(err)
+	}
+	for i:=0;i<50;i++{
+		mustSet(t,s1,"key",string(rune('a'+i%26)))
+	}
+
+	// phase 2: compact
+	if err:=s1.Compact();err!=nil{
+		t.Fatalf("Compact failed: %v",err)
+	}
+
+	// phase 3: write more after compact
+	mustSet(t,s1,"key","final")
+	mustSet(t,s1,"after","compact")
+
+	if err:=s1.Close();err!=nil{
+		t.Fatal(err)
+	}
+
+	// phase 4: restart and verify
+	s2,err:=NewWalStore(path,store.NewMemoryStore())
+	if(err!=nil){
+		t.Fatal(err)
+	}
+	mustGet(t,s2,"key","final")
+	mustGet(t,s2,"after","compact")
+}
+
+func TestWAL_Compact_DeletePreserved(t *testing.T){
+	path:=filepath.Join(t.TempDir(),"compact.wal")
+	s,err:=NewWalStore(path,store.NewMemoryStore())
+	if(err!=nil){
+		t.Fatal(err)
+	}
+
+	mustSet(t,s,"temp","data")
+	s.Delete("temp")
+
+	if err:=s.Compact();err!=nil{
+		t.Fatalf("Compact failed: %v",err)
+	}
+
+	_,err=s.Get("temp")
+	if(!errors.Is(err,store.ErrKeyNotFound)){
+		t.Fatalf("expected ErrKeyNotFound after compact, got %v",err)
+	}
+}
+
+func TestWAL_Compact_ClosedStore(t *testing.T){
+	path:=filepath.Join(t.TempDir(),"compact.wal")
+	s,err:=NewWalStore(path,store.NewMemoryStore())
+	if(err!=nil){
+		t.Fatal(err)
+	}
+	s.Close()
+
+	err=s.Compact()
+	if(!errors.Is(err,store.ErrStoreShutDown)){
+		t.Fatalf("expected ErrStoreShutDown, got %v",err)
+	}
+}
+
+func TestWAL_Compact_ContinuesWorking(t *testing.T){
+	path:=filepath.Join(t.TempDir(),"compact.wal")
+	s,err:=NewWalStore(path,store.NewMemoryStore())
+	if(err!=nil){
+		t.Fatal(err)
+	}
+
+	// compact multiple times
+	for i:=0;i<3;i++{
+		mustSet(t,s,"x","iter"+string(rune('0'+i)))
+		if err:=s.Compact();err!=nil{
+			t.Fatalf("Compact iter %d failed: %v",i,err)
+		}
+	}
+
+	mustGet(t,s,"x","iter2")
+	mustSet(t,s,"y","after")
+	mustGet(t,s,"y","after")
+}
