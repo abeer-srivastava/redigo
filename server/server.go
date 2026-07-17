@@ -21,6 +21,7 @@ func NewServer(addr string,store KVStore)*Server{
 	
 	mux:=http.NewServeMux()
 	mux.HandleFunc("GET /keys/{key}",h.GetKey)
+	mux.HandleFunc("GET /keys",h.ScanKeys)
 	mux.HandleFunc("PUT /keys/{key}",h.SetKey)
 	mux.HandleFunc("DELETE /keys/{key}",h.DeleteKey)
 	mux.HandleFunc("HEAD /keys/{key}",h.ExistsKey)

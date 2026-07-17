@@ -69,6 +69,10 @@ func (w *WalStore)Exists(key string) bool{
 	return w.store.Exists(key)
 }
 
+func (w *WalStore)Scan(start,end string)([]store.KeyValue,error){
+	return w.store.Scan(start,end)
+}
+
 func (w *WalStore)Delete(key string) error{
 	if(key==""){
 		return store.ErrEmptyKey

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
@@ -50,7 +51,7 @@ func (h *Handler) SetKey(w http.ResponseWriter,r *http.Request){
 		storeToHttp(w,store.ErrEmptyKey)
 		return
 	}
-	body,err:=io.ReadAll(r.Body)
+	body,err:=io.ReadAll(io.LimitReader(r.Body,1<<20))
 	if(err!=nil){
 		http.Error(w,"invalid request",http.StatusBadRequest)
 		return 
@@ -101,4 +102,27 @@ func (h *Handler) ExistsKey(w http.ResponseWriter,r *http.Request){
 		return
 	}
 	w.WriteHeader(404)
+}
+
+func (h *Handler) ScanKeys(w http.ResponseWriter,r *http.Request){
+	start:=r.URL.Query().Get("start")
+	end:=r.URL.Query().Get("end")
+	if(start=="" && end==""){
+		http.Error(w,"start and end query params required",http.StatusBadRequest)
+		return
+	}
+	if(start==""){
+		start=end
+	}
+	if(end==""){
+		end=start
+	}
+	result,err:=h.store.Scan(start,end)
+	if(err!=nil){
+		storeToHttp(w,err)
+		return
+	}
+	w.Header().Set("Content-Type","application/json")
+	w.WriteHeader(200)
+	json.NewEncoder(w).Encode(result)
 }
