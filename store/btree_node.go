@@ -132,6 +132,39 @@ func (node *BtreeNode) search(key string)([]byte,bool){
 	return node.children[i].search(key)
 }
 
+func (node *BtreeNode) scanRange(start,end string,result *[]KeyValue){
+	if(node.isLeaf){
+		for i:=0;i<node.n;i++{
+			if(node.keys[i]>=start && node.keys[i]<=end){
+				val:=make([]byte,len(node.values[i]))
+				copy(val,node.values[i])
+				*result=append(*result,KeyValue{Key:node.keys[i],Value:val})
+			}
+		}
+		return
+	}
+
+	i:=0
+	for i<node.n && node.keys[i]<start{
+		i++
+	}
+
+	if(i<=len(node.children)){
+		node.children[i].scanRange(start,end,result)
+	}
+
+	for i<node.n && node.keys[i]<=end{
+		val:=make([]byte,len(node.values[i]))
+		copy(val,node.values[i])
+		*result=append(*result,KeyValue{Key:node.keys[i],Value:val})
+
+		if(i+1<=len(node.children)){
+			node.children[i+1].scanRange(start,end,result)
+		}
+		i++
+	}
+}
+
 func (node *BtreeNode) getPredecessor(i int)(string,[]byte){
 	cur:=node.children[i]
 	for !cur.isLeaf{

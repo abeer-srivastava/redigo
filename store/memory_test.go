@@ -116,3 +116,91 @@ func TestConcurrentReadWrite(t *testing.T) {
 
 	wg.Wait()
 }
+
+func TestScan_Basic(t *testing.T){
+	s:=NewMemoryStore()
+	s.Set("a",[]byte("1"))
+	s.Set("b",[]byte("2"))
+	s.Set("c",[]byte("3"))
+	s.Set("d",[]byte("4"))
+	s.Set("e",[]byte("5"))
+
+	result,err:=s.Scan("b","d")
+	if(err!=nil){
+		t.Fatalf("Scan failed: %v",err)
+	}
+	if(len(result)!=3){
+		t.Fatalf("expected 3 results, got %d",len(result))
+	}
+	if(result[0].Key!="b" || result[1].Key!="c" || result[2].Key!="d"){
+		t.Fatalf("unexpected keys: %v",result)
+	}
+}
+
+func TestScan_Empty(t *testing.T){
+	s:=NewMemoryStore()
+	s.Set("a",[]byte("1"))
+
+	result,err:=s.Scan("x","z")
+	if(err!=nil){
+		t.Fatalf("Scan failed: %v",err)
+	}
+	if(len(result)!=0){
+		t.Fatalf("expected 0 results, got %d",len(result))
+	}
+}
+
+func TestScan_SingleKey(t *testing.T){
+	s:=NewMemoryStore()
+	s.Set("a",[]byte("1"))
+	s.Set("b",[]byte("2"))
+	s.Set("c",[]byte("3"))
+
+	result,err:=s.Scan("b","b")
+	if(err!=nil){
+		t.Fatalf("Scan failed: %v",err)
+	}
+	if(len(result)!=1){
+		t.Fatalf("expected 1 result, got %d",len(result))
+	}
+	if(result[0].Key!="b"){
+		t.Fatalf("expected key b, got %s",result[0].Key)
+	}
+}
+
+func TestClosed_SetAfterClose(t *testing.T){
+	s:=NewMemoryStore()
+	s.Close()
+	err:=s.Set("a",[]byte("1"))
+	if(err!=ErrStoreShutDown){
+		t.Fatalf("expected ErrStoreShutDown, got %v",err)
+	}
+}
+
+func TestClosed_GetAfterClose(t *testing.T){
+	s:=NewMemoryStore()
+	s.Set("a",[]byte("1"))
+	s.Close()
+	_,err:=s.Get("a")
+	if(err!=ErrStoreShutDown){
+		t.Fatalf("expected ErrStoreShutDown, got %v",err)
+	}
+}
+
+func TestClosed_DeleteAfterClose(t *testing.T){
+	s:=NewMemoryStore()
+	s.Close()
+	err:=s.Delete("a")
+	if(err!=ErrStoreShutDown){
+		t.Fatalf("expected ErrStoreShutDown, got %v",err)
+	}
+}
+
+func TestClosed_ScanAfterClose(t *testing.T){
+	s:=NewMemoryStore()
+	s.Close()
+	_,err:=s.Scan("a","z")
+	if(err!=ErrStoreShutDown){
+		t.Fatalf("expected ErrStoreShutDown, got %v",err)
+	}
+}

@@ -293,3 +293,200 @@ func BenchmarkBtree_Delete(b *testing.B){
 		}
 	}
 }
+
+func TestBtree_Scan(t *testing.T){
+	b:=NewBtree(3)
+	for i:=0;i<10;i++{
+		mustInsert(t,b,fmt.Sprintf("key%02d",i),fmt.Sprintf("val%02d",i))
+	}
+
+	result:=b.Scan("key03","key07")
+	if(len(result)!=5){
+		t.Fatalf("expected 5 results, got %d",len(result))
+	}
+	for i:=0;i<5;i++{
+		want:=fmt.Sprintf("key%02d",i+3)
+		if(result[i].Key!=want){
+			t.Fatalf("result[%d].Key = %q, want %q",i,result[i].Key,want)
+		}
+	}
+}
+
+func TestBtree_Scan_SingleKey(t *testing.T){
+	b:=NewBtree(3)
+	b.Insert("a",[]byte("1"))
+	b.Insert("b",[]byte("2"))
+	b.Insert("c",[]byte("3"))
+
+	result:=b.Scan("b","b")
+	if(len(result)!=1){
+		t.Fatalf("expected 1, got %d",len(result))
+	}
+	if(result[0].Key!="b"){
+		t.Fatalf("expected b, got %s",result[0].Key)
+	}
+}
+
+func TestBtree_Scan_Empty(t *testing.T){
+	b:=NewBtree(3)
+	b.Insert("a",[]byte("1"))
+
+	result:=b.Scan("x","z")
+	if(len(result)!=0){
+		t.Fatalf("expected 0, got %d",len(result))
+	}
+}
+
+func TestBtree_Scan_All(t *testing.T){
+	b:=NewBtree(3)
+	b.Insert("a",[]byte("1"))
+	b.Insert("b",[]byte("2"))
+	b.Insert("c",[]byte("3"))
+
+	result:=b.Scan("a","z")
+	if(len(result)!=3){
+		t.Fatalf("expected 3, got %d",len(result))
+	}
+}
+
+func TestBTreeStore_SetGet(t *testing.T){
+	s:=NewBTreeStore(3)
+	err:=s.Set("key",[]byte("test"))
+	if(err!=nil){
+		t.Fatalf("Set failed: %v",err)
+	}
+	val,err:=s.Get("key")
+	if(err!=nil){
+		t.Fatalf("Get failed: %v",err)
+	}
+	if(string(val)!="test"){
+		t.Fatalf("expected test, got %s",string(val))
+	}
+}
+
+func TestBTreeStore_Delete(t *testing.T){
+	s:=NewBTreeStore(3)
+	s.Set("key",[]byte("test"))
+	err:=s.Delete("key")
+	if(err!=nil){
+		t.Fatalf("Delete failed: %v",err)
+	}
+	_,err=s.Get("key")
+	if(err!=ErrKeyNotFound){
+		t.Fatalf("expected ErrKeyNotFound, got %v",err)
+	}
+}
+
+func TestBTreeStore_Exists(t *testing.T){
+	s:=NewBTreeStore(3)
+	s.Set("key",[]byte("test"))
+	if(!s.Exists("key")){
+		t.Fatal("expected Exists to return true")
+	}
+	s.Delete("key")
+	if(s.Exists("key")){
+		t.Fatal("expected Exists to return false")
+	}
+}
+
+func TestBTreeStore_Scan(t *testing.T){
+	s:=NewBTreeStore(3)
+	s.Set("a",[]byte("1"))
+	s.Set("b",[]byte("2"))
+	s.Set("c",[]byte("3"))
+	s.Set("d",[]byte("4"))
+
+	result,err:=s.Scan("b","d")
+	if(err!=nil){
+		t.Fatalf("Scan failed: %v",err)
+	}
+	if(len(result)!=3){
+		t.Fatalf("expected 3 results, got %d",len(result))
+	}
+	if(result[0].Key!="b" || result[1].Key!="c" || result[2].Key!="d"){
+		t.Fatalf("unexpected results: %v",result)
+	}
+}
+
+func TestBTreeStore_EmptyKey(t *testing.T){
+	s:=NewBTreeStore(3)
+	err:=s.Set("",[]byte("val"))
+	if(err!=ErrEmptyKey){
+		t.Fatalf("expected ErrEmptyKey, got %v",err)
+	}
+	_,err=s.Get("")
+	if(err!=ErrEmptyKey){
+		t.Fatalf("expected ErrEmptyKey, got %v",err)
+	}
+	err=s.Delete("")
+	if(err!=ErrEmptyKey){
+		t.Fatalf("expected ErrEmptyKey, got %v",err)
+	}
+	if(s.Exists("")){
+		t.Fatal("expected false for empty key")
+	}
+}
+
+func TestBTreeStore_Closed(t *testing.T){
+	s:=NewBTreeStore(3)
+	s.Close()
+	err:=s.Set("a",[]byte("1"))
+	if(err!=ErrStoreShutDown){
+		t.Fatalf("expected ErrStoreShutDown, got %v",err)
+	}
+	_,err=s.Get("a")
+	if(err!=ErrStoreShutDown){
+		t.Fatalf("expected ErrStoreShutDown, got %v",err)
+	}
+	err=s.Delete("a")
+	if(err!=ErrStoreShutDown){
+		t.Fatalf("expected ErrStoreShutDown, got %v",err)
+	}
+	_,err=s.Scan("a","z")
+	if(err!=ErrStoreShutDown){
+		t.Fatalf("expected ErrStoreShutDown, got %v",err)
+	}
+}
+
+func TestBTreeStore_LargeDataset(t *testing.T){
+	s:=NewBTreeStore(5)
+	n:=200
+	for i:=0;i<n;i++{
+		s.Set(fmt.Sprintf("key%04d",i),[]byte(fmt.Sprintf("val%04d",i)))
+	}
+	for i:=0;i<n;i++{
+		val,err:=s.Get(fmt.Sprintf("key%04d",i))
+		if(err!=nil){
+			t.Fatalf("Get key%04d failed: %v",i,err)
+		}
+		if(string(val)!=fmt.Sprintf("val%04d",i)){
+			t.Fatalf("key%04d: want val%04d, got %s",i,i,string(val))
+		}
+	}
+}
+
+func TestBTreeStore_ScanSorted(t *testing.T){
+	s:=NewBTreeStore(3)
+	// insert reverse order
+	for i:=99;i>=0;i--{
+		s.Set(fmt.Sprintf("key%03d",i),[]byte(fmt.Sprintf("val%03d",i)))
+	}
+	result,err:=s.Scan("key000","key009")
+	if(err!=nil){
+		t.Fatalf("Scan failed: %v",err)
+	}
+	if(len(result)!=10){
+		t.Fatalf("expected 10 results, got %d",len(result))
+	}
+	for i:=0;i<10;i++{
+		want:=fmt.Sprintf("key%03d",i)
+		if(result[i].Key!=want){
+			t.Fatalf("result[%d].Key = %q, want %q",i,result[i].Key,want)
+		}
+	}
+}
+
+func TestBTreeStore_ImplementsStoreInterface(t *testing.T){
+	var _ Store = (*BTreeStore)(nil)
+	var _ Store = (*MemoryStore)(nil)
+}

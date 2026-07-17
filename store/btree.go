@@ -55,3 +55,11 @@ func (b *Btree) Delete(key string){
 		b.root=b.root.children[0]
 	}
 }
+
+func (b *Btree) Scan(start,end string)([]KeyValue){
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	var result []KeyValue
+	b.root.scanRange(start,end,&result)
+	return result
+}
